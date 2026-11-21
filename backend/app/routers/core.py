@@ -2,6 +2,8 @@ from fastapi import APIRouter, Body, HTTPException
 
 from app.db import connect
 from app.modules import STUBS
+from app.modules.open_close_order_fence import board as fence_board_data
+from app.modules.open_close_order_fence import open_drafts
 from app.services import catalog, detect, ingest, scd
 
 router = APIRouter(prefix="/api")
@@ -119,6 +121,25 @@ def quarantine():
             "SELECT * FROM quarantine ORDER BY id DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@router.get("/fence/board")
+def fence_board():
+    """序栅栏核证只读接口：快照 id、原因、关联 run、草稿清理位、载荷与审计流。"""
+    conn = connect()
+    try:
+        return fence_board_data(conn)
+    finally:
+        conn.close()
+
+
+@router.get("/fence/drafts")
+def fence_drafts(store_id: str | None = None):
+    conn = connect()
+    try:
+        return [dict(r) for r in open_drafts(conn, store_id)]
     finally:
         conn.close()
 

@@ -61,7 +61,7 @@ export default function Ingest() {
         <table>
           <thead>
             <tr>
-              <th>快照</th><th>门店</th><th>as_of</th><th>开-闭</th><th>mask</th><th>状态</th><th>hash</th>
+              <th>快照</th><th>门店</th><th>as_of</th><th>开-闭</th><th>mask</th><th>状态</th><th>入维</th><th>hash</th>
             </tr>
           </thead>
           <tbody>
@@ -73,6 +73,11 @@ export default function Ingest() {
                 <td>{s.open_time}–{s.close_time}</td>
                 <td className="mono">{s.weekday_mask}</td>
                 <td><span className={`badge ${s.biz_status}`}>{s.biz_status}</span></td>
+                <td>
+                  <span className={`badge ${s.applied === 0 ? "bad" : "ok"}`}>
+                    {s.applied === 0 ? "旁路搁置" : "可入维"}
+                  </span>
+                </td>
                 <td className="mono">{s.row_hash}</td>
               </tr>
             ))}

@@ -14,6 +14,15 @@ def overview(conn):
         "检测跑次": conn.execute("SELECT COUNT(*) AS c FROM detect_runs").fetchone()["c"],
         "核证条": conn.execute("SELECT COUNT(*) AS c FROM scd_proofs").fetchone()["c"],
         "搁置": conn.execute("SELECT COUNT(*) AS c FROM quarantine").fetchone()["c"],
+        "序栅栏搁置": conn.execute(
+            "SELECT COUNT(*) AS c FROM open_close_quarantine"
+        ).fetchone()["c"],
+        "未提交草稿": conn.execute(
+            "SELECT COUNT(*) AS c FROM scd_drafts WHERE status='open'"
+        ).fetchone()["c"],
+        "旁路快照": conn.execute(
+            "SELECT COUNT(*) AS c FROM source_snapshots WHERE applied=0"
+        ).fetchone()["c"],
     }
 
 

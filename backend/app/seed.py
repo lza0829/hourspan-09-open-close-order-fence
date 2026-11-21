@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS source_snapshots (
   weekday_mask TEXT NOT NULL DEFAULT '1111100',
   biz_status TEXT NOT NULL DEFAULT 'open',
   payload_json TEXT NOT NULL DEFAULT '{}',
-  row_hash TEXT NOT NULL
+  row_hash TEXT NOT NULL,
+  applied INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS detect_runs (
@@ -87,11 +88,64 @@ CREATE TABLE IF NOT EXISTS scd_proofs (
   created_at TEXT NOT NULL
 );
 
+-- 序栅栏（open_close_order_fence）落库形态甲：搁置表 + 快照 applied 旁路 + 草稿 + 核证流
+CREATE TABLE IF NOT EXISTS open_close_quarantine (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  detail_json TEXT NOT NULL DEFAULT '{}',
+  related_run_id TEXT,
+  draft_cleared INTEGER NOT NULL DEFAULT 0,
+  cleared_draft_ids_json TEXT NOT NULL DEFAULT '[]',
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scd_drafts (
+  id TEXT PRIMARY KEY,
+  detect_run_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  snapshot_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  from_hash TEXT,
+  to_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  applied_at TEXT,
+  detail_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS fence_proofs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  event TEXT NOT NULL,
+  reason TEXT,
+  related_run_id TEXT,
+  draft_cleared INTEGER NOT NULL DEFAULT 0,
+  detail_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_hist_store_current
   ON dim_store_hours_hist(store_id, is_current);
 CREATE INDEX IF NOT EXISTS idx_snap_store_ts
   ON source_snapshots(store_id, as_of_ts);
+CREATE INDEX IF NOT EXISTS idx_ocq_snap
+  ON open_close_quarantine(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_drafts_status
+  ON scd_drafts(status, store_id);
+CREATE INDEX IF NOT EXISTS idx_fence_snap
+  ON fence_proofs(snapshot_id);
 """
+
+
+def _ensure_column(conn, table: str, column: str, ddl_type: str):
+    """幂等加列：老库已存在时跳过（CREATE TABLE IF NOT EXISTS 不会补列）。"""
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}")
 
 
 def now_iso() -> str:
@@ -106,6 +160,9 @@ def row_hash(open_time, close_time, weekday_mask, biz_status) -> str:
 def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
+    # 老库迁移：applied 旁路标记（1=可入维，0=被序栅栏搁置）
+    _ensure_column(conn, "source_snapshots", "applied", "INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "detect_runs", "status", "TEXT NOT NULL DEFAULT 'applied'")
     if not conn.execute("SELECT 1 FROM settings WHERE key='as_of_mode'").fetchone():
         conn.execute("INSERT INTO settings(key, value) VALUES ('as_of_mode', 'business_ts')")
     if conn.execute("SELECT COUNT(*) AS c FROM stores").fetchone()["c"] == 0:

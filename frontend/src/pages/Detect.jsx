@@ -49,7 +49,7 @@ export default function Detect() {
       <div className="panel">
         <h2>检测跑次</h2>
         <table>
-          <thead><tr><th>跑次</th><th>批</th><th>时间</th><th>变更数</th><th>报告摘要</th></tr></thead>
+          <thead><tr><th>跑次</th><th>批</th><th>时间</th><th>变更数</th><th>状态</th><th>报告摘要</th></tr></thead>
           <tbody>
             {runs.map((r) => (
               <tr key={r.id}>
@@ -57,6 +57,11 @@ export default function Detect() {
                 <td className="mono">{r.batch_id || "—"}</td>
                 <td>{r.created_at}</td>
                 <td>{r.changed_count}</td>
+                <td>
+                  <span className={`badge ${r.status === "applied" ? "ok" : "suspended"}`}>
+                    {r.status || "applied"}
+                  </span>
+                </td>
                 <td className="mono">{(r.report_json || "").slice(0, 120)}</td>
               </tr>
             ))}
